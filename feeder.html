@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="cs" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Home Inventory</title>
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/pocketbase/dist/pocketbase.umd.js"></script>
+    <style>
+        :root {
+            --bg: #f8fafc;
+            --text: #1e293b;
+            --card: #ffffff;
+            --primary: #10b981;
+            --primary-hover: #059669;
+            --accent: #6366f1;
+            --border: #e2e8f0;
+            --shadow: 0 2px 3px -1px rgb(0 0 0 / 0.1);
+        }
+
+        [data-theme="dark"] {
+            --bg: #0f172a;
+            --text: #f1f5f9;
+            --card: #1e293b;
+            --border: #334155;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            margin: 0;
+            padding-bottom: 80px; /* Space for bottom nav */
+            transition: background 0.3s;
+        }
+
+        .container { max-width: 600px; margin: 0 auto; padding: 1rem; }
+        .hidden { display: none !important; }
+
+        /* AUTH PAGE */
+        #login-page { display: flex; align-items: center; justify-content: center; min-height: 100vh; }
+        .auth-card { background: var(--card); padding: 2rem; border-radius: 1rem; box-shadow: var(--shadow); width: 100%; max-width: 350px; }
+        input { width: 100%; padding: 0.75rem; margin-bottom: 1rem; border: 1px solid var(--border); border-radius: 0.5rem; box-sizing: border-box; background: var(--card); color: var(--text); }
+        button { cursor: pointer; border: none; transition: 0.2s; }
+
+        /* NAVIGATION */
+        nav { 
+            position: fixed; bottom: 0; left: 0; right: 0; 
+            background: var(--card); border-top: 1px solid var(--border);
+            display: flex; justify-content: space-around; padding: 0.5rem 0;
+            z-index: 100;
+        }
+        nav a, nav button { 
+            background: none; color: var(--text); border: none; 
+            display: flex; flex-direction: column; align-items: center; 
+            text-decoration: none; font-size: 0.7rem; opacity: 0.6;
+        }
+        nav a.active { opacity: 1; color: var(--primary); }
+
+        /* CARDS & ITEMS */
+        .card { 
+            background: var(--card); padding: 1rem; border-radius: 0.40rem; 
+            margin-bottom: 0.75rem; box-shadow: 0 1px 1px 0 rgba(0, 0, 0, 0.1), 0 1px 2px -1px rgba(0, 0, 0, 0.1);;
+            border: 1px solid var(--border);
+        }
+        .grid-item { display: flex; align-items: center; gap: 1rem; }
+        .grid-item .info { flex-grow: 1; }
+        .grid-item .title { font-weight: 600; display: block; }
+        .grid-item .amount { font-size: 0.9rem; color: #64748b; }
+
+        /* BUTTONS */
+        .btn-primary { background: var(--primary); color: white; padding: 0.75rem 1.5rem; border-radius: 0.5rem; font-weight: 600; width: 100%; }
+        .btn-edit { background: var(--bg); border: 1px solid var(--border); padding: 0.5rem; border-radius: 0.5rem; color: var(--text); flex-shrink: 0; }
+        
+        /* FAB */
+        .fab { 
+            position: fixed; bottom: 5rem; right: 1.5rem; 
+            width: 56px; height: 56px; border-radius: 28px;
+            background: var(--primary); color: white; 
+            display: flex; align-items: center; justify-content: center;
+            box-shadow: 0 10px 15px -3px rgba(16, 185, 129, 0.4);
+        }
+
+        /* MODAL */
+        dialog { border: none; border-radius: 1rem; background: var(--card); color: var(--text); box-shadow: var(--shadow); max-width: 400px; width: 90%; }
+        dialog::backdrop { background: rgba(0,0,0,0.5); }
+        .modal-footer { display: flex; gap: 0.5rem; margin-top: 1rem; }
+        .btn-cancel { background: #e2e8f0; color: #475569; padding: 0.75rem; border-radius: 0.5rem; flex: 1; }
+        .btn-save { background: var(--primary); color: white; padding: 0.75rem; border-radius: 0.5rem; flex: 2; }
+    </style>
+</head>
+<body>
+
+    <div id="login-page">
+        <div class="auth-card">
+            <h2 style="text-align:center">Domů</h2>
+            <form id="login-form">
+                <input type="email" id="email" placeholder="Email" required>
+                <input type="password" id="password" placeholder="Heslo" required>
+                <button type="submit" class="btn-primary">Přihlásit se</button>
+            </form>
+        </div>
+    </div>
+
+    <div id="app-page" class="hidden">
+        <div class="container">
+            <header style="display:flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+                <h2 id="section-title" style="margin:0">Zásoby</h2>
+                <div style="display:flex; gap: 0.5rem;">
+                    <button onclick="getMealSuggestions()" style="background:none; border:none; color:var(--primary)" class="material-icons">psychology</button>
+                    <button onclick="toggleTheme()" style="background:none; border:none; color:var(--text)" class="material-icons">dark_mode</button>
+                </div>
+            </header>
+
+            <section id="sec-inventory">
+                <div id="inventory-list">Načítám...</div>
+            </section>
+
+            <section id="sec-items" class="hidden">
+                <div id="items-list">Načítám...</div>
+            </section>
+
+            <section id="sec-logs" class="hidden">
+                <div id="logs-list">Načítám...</div>
+            </section>
+        </div>
+
+        <nav>
+            <a href="#" id="nav-inventory" class="active" onclick="showSection('inventory')">
+                <span class="material-icons">inventory_2</span><span>Zásoby</span>
+            </a>
+            <a href="#" id="nav-items" onclick="showSection('items')">
+                <span class="material-icons">restaurant_menu</span><span>Katalog</span>
+            </a>
+            <a href="#" id="nav-logs" onclick="showSection('logs')">
+                <span class="material-icons">history</span><span>Pohyby</span>
+            </a>
+            <button onclick="logout()" style="opacity:0.6">
+                <span class="material-icons">logout</span><span>Ven</span>
+            </button>
+        </nav>
+
+        <button class="fab material-icons" onclick="openAddModal()">add</button>
+    </div>
+
+    <dialog id="log-modal">
+        <h3>Skladová operace</h3>
+        <form id="log-form">
+            <label style="font-size:0.8rem; opacity:0.7">Položka</label>
+            <select id="log-item-select" style="width:100%; padding:0.75rem; margin-bottom:1rem; border-radius:0.5rem; border:1px solid var(--border); background:var(--card); color:var(--text)" required></select>
+            
+            <label style="font-size:0.8rem; opacity:0.7">Množství (+ / -)</label>
+            <input type="number" id="log-amount" step="0.1" required>
+            
+            <label style="font-size:0.8rem; opacity:0.7">Poznámka</label>
+            <input type="text" id="log-note">
+            
+            <label style="display:flex; align-items:center; gap:0.5rem; margin-bottom:1rem; cursor:pointer">
+                <input type="checkbox" id="log-set" style="width:auto; margin:0"> 
+                <span>Nastavit jako fixní stav (Inventura)</span>
+            </label>
+
+            <div class="modal-footer">
+                <button type="button" class="btn-cancel" onclick="closeModal()">Zrušit</button>
+                <button type="submit" class="btn-save">Uložit</button>
+            </div>
+        </form>
+    </dialog>
+
+    <dialog id="meal-modal">
+        <h3>Návrhy k večeři</h3>
+        <div id="meal-content" style="white-space: pre-wrap; font-size: 0.9rem; line-height: 1.5;">
+            Přemýšlím... 🤔
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="btn-primary" onclick="document.getElementById('meal-modal').close()">Díky!</button>
+        </div>
+    </dialog>
+
+    <script>
+        const pb = new PocketBase('https://pb.example.com');
+
+        // --- AUTH ---
+        const loginForm = document.getElementById('login-form');
+        loginForm.onsubmit = async (e) => {
+            e.preventDefault();
+            try {
+                await pb.collection('users').authWithPassword(
+                    document.getElementById('email').value,
+                    document.getElementById('password').value
+                );
+                checkAuth();
+            } catch (err) { alert("Chyba: " + err.message); }
+        };
+
+        function logout() {
+            pb.authStore.clear();
+            location.reload();
+        }
+
+        function checkAuth() {
+            if (pb.authStore.isValid) {
+                document.getElementById('login-page').classList.add('hidden');
+                document.getElementById('app-page').classList.remove('hidden');
+                loadAll();
+            }
+        }
+
+        // --- UI LOGIKA ---
+        function showSection(name) {
+            const sections = ['inventory', 'items', 'logs'];
+            const titles = { 'inventory': 'Zásoby', 'items': 'Katalog', 'logs': 'Pohyby' };
+            
+            sections.forEach(s => {
+                document.getElementById(`sec-${s}`).classList.toggle('hidden', s !== name);
+                document.getElementById(`nav-${s}`).classList.toggle('active', s === name);
+            });
+            document.getElementById('section-title').innerText = titles[name];
+        }
+
+        function toggleTheme() {
+            const current = document.documentElement.getAttribute('data-theme');
+            const next = current === 'light' ? 'dark' : 'light';
+            document.documentElement.setAttribute('data-theme', next);
+        }
+
+        // --- DATA ---
+        async function loadAll() {
+            // Načítáme postupně, aby se požadavky netloukly
+            await loadInventory();
+            await loadItems();
+            await loadLogs();
+            await fillItemSelect();
+        }
+
+        async function loadInventory() {
+            const records = await pb.collection('main_inventory').getFullList({ 
+                expand: 'item', filter: 'item.type="food"', sort: '-updated' , requestKey: null 
+            });
+            const container = document.getElementById('inventory-list');
+            container.innerHTML = records.map(r => `
+                <div class="card grid-item">
+                    <div class="info">
+                        <span class="title">${r.expand.item.title}</span>
+                        <span class="amount">${r.amount} ${r.expand.item.unit}</span>
+                    </div>
+                    <button class="btn-edit material-icons" onclick="quickLog('${r.item}', '${r.expand.item.title}')">edit</button>
+                </div>
+            `).join('');
+        }
+
+        async function loadItems() {
+            const records = await pb.collection('main_items').getFullList({ filter: 'type="food"', sort: 'title' , requestKey: null });
+            document.getElementById('items-list').innerHTML = records.map(r => `
+                <div class="card" style="margin-bottom:0.5rem">
+                    <strong>${r.title}</strong> <small style="opacity:0.5">(${r.unit})</small>
+                </div>
+            `).join('');
+        }
+
+        async function loadLogs() {
+            const records = await pb.collection('main_inventory_logs').getFullList({ 
+                expand: 'item', limit: 15, sort: '-created' , requestKey: null 
+            });
+            document.getElementById('logs-list').innerHTML = records.map(r => `
+                <div class="card grid-item" style="padding: 0.5rem 1rem">
+                    <div class="info">
+                        <strong>${r.expand.item.title}</strong><br>
+                        <small style="opacity:0.6">${new Date(r.created).toLocaleString('cs-CZ')}</small>
+                    </div>
+                    <div style="font-weight:bold; color: ${r.amount >= 0 ? 'var(--primary)' : '#ef4444'}">
+                        ${r.set ? 'SET ' : ''}${r.amount > 0 ? '+' : ''}${r.amount}
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        async function fillItemSelect() {
+            const items = await pb.collection('main_items').getFullList({ sort: 'title' });
+            const select = document.getElementById('log-item-select');
+            select.innerHTML = items.map(i => `<option value="${i.id}">${i.title}</option>`).join('');
+        }
+
+        // --- MODAL & LOGOVÁNÍ ---
+        const modal = document.getElementById('log-modal');
+        function openAddModal() { modal.showModal(); }
+        function closeModal() { modal.close(); }
+
+        function quickLog(itemId, title) {
+            document.getElementById('log-item-select').value = itemId;
+            openAddModal();
+        }
+
+        document.getElementById('log-form').onsubmit = async (e) => {
+            e.preventDefault();
+            const data = {
+                item: document.getElementById('log-item-select').value,
+                amount: parseFloat(document.getElementById('log-amount').value),
+                note: document.getElementById('log-note').value,
+                set: document.getElementById('log-set').checked
+            };
+
+            await pb.collection('main_inventory_logs').create(data);
+
+            fetch('https://n8n.example.com/webhook/LOG_WEBHOOK_ID', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ item: data.item })
+            }).catch(e => console.error(e));
+
+            closeModal();
+            e.target.reset();
+            setTimeout(loadAll, 800);
+        };
+
+        checkAuth();
+
+        async function getMealSuggestions() {
+            const modal = document.getElementById('meal-modal');
+            const content = document.getElementById('meal-content');
+            
+            content.innerHTML = "Vymýšlím... <br><span class='material-icons' style='animation: spin 2s linear infinite'>autorenew</span>";
+            modal.showModal();
+
+            try {
+                const response = await fetch('https://n8n.example.com/webhook/MEAL_WEBHOOK_ID', {
+                    method: 'POST'
+                });
+                let data = await response.json();
+
+                // LOG pro ladění - otevři si F12 konzoli v prohlížeči a uvidíš, co přišlo
+                console.log("Data z n8n:", data);
+
+                // Pokud n8n vrátilo pole, vezmeme první prvek
+                if (Array.isArray(data)) data = data[0];
+
+                if (data && data.suggestion) {
+                    let formatted = data.suggestion
+                        .replace(/\*\*(.*?)\*\*/g, '<b>$1</b>')
+                        .replace(/\n/g, '<br>');
+                    content.innerHTML = formatted;
+                } else {
+                    // Pokud suggestion chybí, vypíšeme celou odpověď pro debug
+                    content.innerText = "n8n vrátilo data, ale chybí v nich 'suggestion': " + JSON.stringify(data);
+                }
+            } catch (e) {
+                console.error(e);
+                content.innerText = "Chyba při fetchi: " + e.message;
+            }
+        }
+    </script>
+</body>
+</html>
